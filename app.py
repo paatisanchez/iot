@@ -23,7 +23,6 @@ PPS = "Patient Physiological Sensors"
 RES = "Room Environment Sensors"
 REA = "Room Environment Actuators"
 SOD = "Staff Office Alert Device"
-STAFF = "Medical Staff"
 SIG = "Sensor Ingestion Gateway"
 ACT = "Room & Staff Alert Actuation Gateway"
 BRK = "Hospital IoT Message Broker"
@@ -49,20 +48,20 @@ PHY, EDGE, INT, L3C, BACK = "#64748b", "#2E7D5B", "#7B3FA0", "#B8541A", "#1168BD
 NODES = {
     PPS: (22, 62, 150, 46, PHY), RES: (22, 128, 150, 46, PHY), REA: (22, 196, 150, 46, PHY),
     SIG: (206, 80, 150, 50, EDGE), ACT: (206, 190, 150, 58, EDGE),
-    SOD: (22, 318, 160, 46, PHY), PORT: (200, 318, 160, 46, BACK), STAFF: (200, 370, 160, 46, "#08427B"),
+    SOD: (22, 318, 160, 46, PHY), PORT: (200, 318, 160, 46, BACK),
     CTX: (410, 62, 210, 54, BACK), BRK: (410, 160, 210, 54, BACK), LIFE: (410, 270, 210, 54, BACK),
     OPDB: (650, 62, 190, 46, BACK), TDB: (650, 122, 190, 46, BACK), TWIN: (650, 200, 190, 54, INT),
     DEC: (870, 62, 200, 54, L3C), AI: (870, 200, 200, 54, INT),
-    DTSR: (24, 460, 210, 46, L3C), AIRR: (254, 460, 210, 46, L3C), COORD: (484, 460, 210, 46, L3C),
-    CFG: (714, 460, 220, 46, BACK), SLE: (954, 460, 224, 46, L3C),
-    CADE: (24, 540, 210, 46, L3C), SCT: (254, 540, 210, 46, "#6B5B95"),
-    RCP: (484, 540, 210, 46, L3C), CAEP: (714, 540, 220, 46, L3C),
+    DTSR: (24, 420, 210, 46, L3C), AIRR: (254, 420, 210, 46, L3C), COORD: (484, 420, 210, 46, L3C),
+    CFG: (714, 420, 220, 46, BACK), SLE: (954, 420, 224, 46, L3C),
+    CADE: (24, 500, 210, 46, L3C), SCT: (254, 500, 210, 46, "#6B5B95"),
+    RCP: (484, 500, 210, 46, L3C), CAEP: (714, 500, 220, 46, L3C),
 }
 ZONES = [
     (8, 28, 368, 260, "🏨 Room 204 · devices & Edge (C4 L2)"),
-    (8, 296, 368, 126, "🏢 Medical Staff Room"),
+    (8, 296, 368, 86, "🏢 Medical Staff Room"),
     (392, 28, 800, 354, "☁️ C4 L2 · Hospital Backend Platform"),
-    (8, 432, 1184, 176, "🧠 C4 L3 · Decision & Control Service (internals)"),
+    (8, 392, 1184, 176, "🧠 C4 L3 · Decision & Control Service (internals)"),
 ]
 
 # ============================================================
@@ -449,12 +448,9 @@ def emg_tape():
 
     # ---- Acknowledge
     s.update(alert="ACKNOWLEDGED", buz=False, phase="ACK")
-    e(STAFF, PORT, "HTTPS", "portal UI · acknowledge", "Staff acknowledges alert in the portal",
-      dict(alert_id=aid, action="ACKNOWLEDGE", user="Medical Staff", timestamp=T.now()), "L2", "ALERTS",
-      "👩‍⚕️ Medical Staff see the alert in the portal and acknowledge it (HTTPS).")
-    e(PORT, LIFE, "REST / HTTPS", "POST /alerts/{id}/acknowledge", "Acknowledge clinical alert",
+    e(PORT, LIFE, "REST / HTTPS", "POST /alerts/{id}/acknowledge", "Staff acknowledges alert",
       dict(alert_id=aid, patient_id=PID, acknowledged_by="Medical Staff", timestamp=T.now()), "L2", "ALERTS",
-      "The portal forwards the acknowledgement to the Alert Lifecycle Service, which does not decide: it only updates the lifecycle.")
+      "👩‍⚕️ Medical Staff acknowledge the alert in the portal (HTTPS).")
     e(LIFE, OPDB, "SQL", "alert_state", "Store ACKNOWLEDGED state", dict(alert_id=aid, state="ACKNOWLEDGED"), "L2", "ALERTS",
       "The acknowledgement is persisted.")
     pl = dict(command_id=T.new_id("CMD"), timestamp=T.now(), alert_id=aid, command="SILENCE", red_light="ON", buzzer="OFF")
@@ -543,7 +539,7 @@ svg text{font-family:Arial,sans-serif}.leg{font-size:12px;color:#64748b;margin:0
  <select id="sp"><option value=".5">0.5×</option><option value="1" selected>1×</option><option value="2">2×</option><option value="4">4×</option></select>
  <input type="range" id="rg" min="0" value="0"><span id="cnt" style="font-weight:800"></span><button id="gt" class="g" style="display:none"></button></div>
 <div class="card"><p class="leg">🟠 current message · 🟢 used links · ● message in transit · faded nodes = not active yet</p>
- <svg id="map" viewBox="0 0 1200 620" width="100%"></svg></div>
+ <svg id="map" viewBox="0 0 1200 580" width="100%"></svg></div>
 <div class="card" style="margin-top:12px"><b>Recent messages</b><div class="tr" id="tr"></div></div>
 <script>
 const D=__DATA__,F=D.frames,N=D.nodes,KIND=D.kind,$=id=>document.getElementById(id);
@@ -588,7 +584,7 @@ function emgScene(s){const c=s.anom>=.75?'#f87171':s.anom>=.4?'#fbbf24':'#4ade80
  <style>@keyframes bt{15%{transform:scale(1.1)}}</style>`}
 const draw=s=>{$('scene').innerHTML=(KIND=='sleep'?sleepScene:emgScene)(s)+`<style>@keyframes fl{50%{opacity:.5}}@keyframes bl{50%{opacity:.2}}</style>`+badge(F[Math.max(i,0)])};
 const BADGE={PPS:'📡 Patient sensors send data',RES:'📡 Room sensors send data',REAd:'⚙️ Actuators apply the command',REAs:'↩️ Actuators confirm their state',SODd:'🚨 Alert device receives the command',PORT:'👩‍⚕️ Staff uses the clinical portal'};
-function badge(f){if(!f)return'';let t='';if(f.src==D.k.PPS)t=BADGE.PPS;else if(f.src==D.k.RES)t=BADGE.RES;else if(f.dst==D.k.REA)t=BADGE.REAd;else if(f.src==D.k.REA)t=BADGE.REAs;else if(f.dst==D.k.SOD)t=BADGE.SODd;else if(f.src==D.k.STAFF||f.src==D.k.PORT||f.dst==D.k.PORT)t=BADGE.PORT;return t?`<div class="badge">${t}</div>`:''}
+function badge(f){if(!f)return'';let t='';if(f.src==D.k.PPS)t=BADGE.PPS;else if(f.src==D.k.RES)t=BADGE.RES;else if(f.dst==D.k.REA)t=BADGE.REAd;else if(f.src==D.k.REA)t=BADGE.REAs;else if(f.dst==D.k.SOD)t=BADGE.SODd;else if(f.src==D.k.PORT||f.dst==D.k.PORT)t=BADGE.PORT;return t?`<div class="badge">${t}</div>`:''}
 function tween(to){cancelAnimationFrame(raf);const from=cur?{...cur}:{...to},t0=performance.now(),dur=700/speed;
  (function st(t){const k=cl((t-t0)/dur),o={...to};for(const q in to)if(typeof to[q]=='number'&&typeof from[q]=='number')o[q]=from[q]+(to[q]-from[q])*k;cur=o;draw(o);if(k<1)raf=requestAnimationFrame(st)})(t0)}
 function packet(f){const p=$('pk'),e=edge(f.src,f.dst),t0=performance.now(),dur=1000/speed;p.style.display='';
@@ -626,7 +622,7 @@ def build_player(kind):
     nodes = {n: dict(x=v[0], y=v[1], w=v[2], h=v[3], c=v[4]) for n, v in NODES.items()}
     if kind == "sleep":
         # Sleep scenario: no staff room, alert lifecycle, alert publisher or sustained tracker
-        nodes = {n: v for n, v in nodes.items() if n not in (SOD, PORT, STAFF, LIFE, CAEP, SCT)}
+        nodes = {n: v for n, v in nodes.items() if n not in (SOD, PORT, LIFE, CAEP, SCT)}
         zones = [z for z in ZONES if "Staff" not in z[4]]
         stages, gates = S_STAGES, {}
     else:
@@ -635,7 +631,7 @@ def build_player(kind):
         zones = ZONES
         stages, gates = E_STAGES, {"ack": "✓ Acknowledge alert", "recovery": "♡ Simulate recovery"}
     data = dict(frames=frames, nodes=nodes, zones=zones, kind=kind, stages=stages, gates=gates,
-                k=dict(PPS=PPS, RES=RES, REA=REA, SOD=SOD, PORT=PORT, STAFF=STAFF))
+                k=dict(PPS=PPS, RES=RES, REA=REA, SOD=SOD, PORT=PORT))
     return PLAYER.replace("__DATA__", json.dumps(data, ensure_ascii=False))
 
 
@@ -661,4 +657,4 @@ else:
     st.caption("Press Play. The demo pauses for staff acknowledgement and for patient recovery. "
                "For readability only the decisive telemetry samples are shown; the Decision Service evaluates every sample.")
 
-components.html(build_player(kind), height=1460, scrolling=True)
+components.html(build_player(kind), height=1420, scrolling=True)
