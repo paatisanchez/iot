@@ -1,0 +1,85 @@
+@startuml
+title Smart Hospital Room - IoT System
+
+top to bottom direction
+
+skinparam shadowing false
+skinparam roundcorner 12
+skinparam defaultTextAlignment center
+skinparam linetype ortho
+skinparam nodesep 35
+skinparam ranksep 45
+skinparam ArrowColor #555555
+skinparam RectangleBorderColor #555555
+skinparam DatabaseBorderColor #555555
+
+' ========================
+' CENTRAL SYSTEM
+' ========================
+
+rectangle "SMART HOSPITAL ROOM\nIoT SYSTEM" as System
+
+
+' ========================
+' INPUTS
+' ========================
+
+rectangle "Wearable Sensors\n────────────\nHeart rate\nBreathing rate\nMovement" as Wearable
+
+rectangle "Room Sensors\n────────────\nTemperature\nAmbient light" as RoomSensors
+
+database "Patient Database\n────────────\nPatient ID\nRoom number\nPatient settings" as DB
+
+
+' ========================
+' OUTPUTS
+' ========================
+
+rectangle "Lighting\n────────────\nLEDs\nMotorized blinds" as Lighting
+
+rectangle "Climate Control\n────────────\nFan / A/C" as Climate
+
+rectangle "Alert System" as Alert
+
+
+' ========================
+' PEOPLE
+' ========================
+
+actor "Patient" as Patient
+actor "Nurse" as Nurse
+actor "Doctor" as Doctor
+
+
+' ========================
+' CONNECTIONS
+' ========================
+
+Patient --> Wearable 
+
+Wearable --> System : physiological data
+RoomSensors --> System : environmental data
+DB --> System : patient & room data
+
+System --> Lighting : light control
+System --> Climate : climate control
+System --> Alert : abnormal event
+
+Alert --> Nurse : warning
+Alert --> Doctor : critical alert
+
+
+' ========================
+' FORCE LAYOUT
+' ========================
+
+Wearable -[hidden]right-> RoomSensors
+RoomSensors -[hidden]right-> System
+System -[hidden]right-> Lighting
+Lighting -[hidden]right-> Climate
+
+System -[hidden]down-> DB
+
+Nurse -[hidden]down-> Doctor
+
+@enduml

@@ -1,0 +1,146 @@
+@startuml Level4_Code
+
+title Smart Hospital Patient Monitoring & Room Automation System\nC4 Level 4 - Code: Clinical Alert Decision Engine (app.py)
+
+top to bottom direction
+
+skinparam shadowing false
+skinparam roundcorner 15
+skinparam nodesep 55
+skinparam ranksep 60
+skinparam defaultFontName Arial
+skinparam defaultFontSize 13
+skinparam ArrowColor #64748B
+skinparam ArrowThickness 1.2
+skinparam componentStyle rectangle
+skinparam packageStyle rectangle
+skinparam packageBackgroundColor #F8FAFC
+skinparam packageBorderColor #94A3B8
+skinparam packageFontColor #0F172A
+skinparam noteBackgroundColor #FFF8E1
+skinparam noteBorderColor #C9A227
+skinparam noteFontColor #333333
+
+legend right
+  |= Colour |= Meaning |
+  |<#999999> | Demo orchestration (Streamlit prototype) |
+  |<#1168BD> | State / configuration |
+  |<#7B3FA0> | Prototype AI calculation |
+  |<#B8541A> | Clinical decision logic (Level 4 target) |
+  |<#6B5B95> | Level 3 dependency: sustained-condition state |
+  |<#2E8B57> | Output returned to Level 3 |
+endlegend
+
+' ============================================================
+' PROTOTYPE ORCHESTRATION (OUTSIDE THE LEVEL 4 TARGET)
+' ============================================================
+package "Demo Orchestration - Streamlit (prototype only)" as demo {
+    component "emg_tape()\nescalation loop\n\nhr 78 -> 148, rr 16 -> 28" as runEmergency #999999
+    component "emg_tape()\nrecovery loop\n\nhr -> 82, rr -> 17" as runRecovery #999999
+}
+
+' ============================================================
+' STATE + CONFIGURATION USED BY THE IMPLEMENTATION
+' ============================================================
+package "Runtime State & Configuration" as runtime {
+    component "s (state dict)\n\nhr, rr, anom, sust\nalert, phase" as patientState #1168BD
+    component "Thresholds\n\nhigh_anomaly = 0.75\nelevated = 0.40\nsustained_samples = 3\n(synthetic demo values)" as emgConfig #1168BD
+}
+
+' ============================================================
+' PROTOTYPE AI CALCULATION
+' In production this responsibility belongs to the AI service from Level 2/3.
+' ============================================================
+package "Prototype AI Analytics\n(simulated locally in app.py)" as prototypeAI {
+    component "anomaly(hr, rr)\n\nnp.interp risk curves for HR and RR\ncombined into one score in [0,1]" as anomalyScore #7B3FA0
+    component "level(score)\n\nHIGH >= 0.75\nELEVATED >= 0.40\nLOW" as levelFn #7B3FA0
+}
+
+' ============================================================
+' LEVEL 3 DEPENDENCY
+' ============================================================
+package "Sustained Condition Tracker\n(Level 3 dependency)" as trackerPackage {
+    component "s['sust']\n\nPrototype implementation:\ncounter in emg_tape()\nfor consecutive high-anomaly samples" as sustainedTracker #6B5B95
+}
+
+' ============================================================
+' LEVEL 4 TARGET: ONE LEVEL 3 COMPONENT ONLY
+' ============================================================
+package "Clinical Alert Decision Engine\n(Level 4 zoom of the Level 3 component)" as engine {
+    component "Alert decision\n(emg_tape)\n\nsust >= 3 consecutive samples\nwith anom >= 0.75\n\nReturns:\nALERT, severity = HIGH" as emergencyDecision #B8541A
+
+    component "Recovery decision\n(emg_tape)\n\nHR <= 100, RR <= 20,\nanomaly <= 25%\n(narrated in the demo)" as emergencyRecovered #B8541A
+
+    component "ClinicalDecision\n\nALERT / RECOVERY / NO_CHANGE\nseverity = HIGH / None" as decisionResult #2E8B57
+}
+
+' ============================================================
+' CLEAN LAYOUT HELPERS
+' ============================================================
+runEmergency -[hidden]right-> runRecovery
+patientState -[hidden]right-> emgConfig
+anomalyScore -[hidden]right-> levelFn
+emergencyDecision -[hidden]right-> emergencyRecovered
+
+' ============================================================
+' DATA FLOW
+' ============================================================
+runEmergency -down-> patientState : writes abnormal\nvital signs
+runRecovery -down-> patientState : writes recovering\nvital signs
+
+patientState -down-> anomalyScore : hr, rr
+anomalyScore -down-> patientState : stores anom
+anomalyScore -right-> levelFn : score
+
+runEmergency -down-> sustainedTracker : increments / resets\nconsecutive-high counter
+emgConfig -down-> sustainedTracker : high_anomaly +\nsustained_samples
+
+patientState -down-> emergencyDecision : current state
+emgConfig -down-> emergencyDecision : decision threshold
+sustainedTracker -down-> emergencyDecision : sustained-condition gate
+
+patientState -down-> emergencyRecovered : recovering state
+emgConfig -down-> emergencyRecovered : recovery thresholds
+
+emergencyDecision -down-> decisionResult : ALERT / NO_CHANGE
+emergencyRecovered -down-> decisionResult : RECOVERY / NO_CHANGE
+
+' ============================================================
+' NOTES
+' ============================================================
+note left of prototypeAI
+  In the production architecture, anomaly scoring belongs to the
+  AI Analytics & Prediction Service and reaches the Decision Service
+  through the AI Result Receiver.
+
+  It is shown here only because the Streamlit prototype computes it
+  locally in Python.
+end note
+
+note right of sustainedTracker
+  Level 3 models this as a dedicated component.
+  The current prototype implements the same behaviour with a local
+  s['sust'] inside emg_tape().
+end note
+
+note right of engine
+  The Decision Service decides.
+  The anomaly score alone never activates the physical alarm.
+end note
+
+note bottom of decisionResult
+  Returned to the Level 3 flow:
+  Clinical Alert Decision Engine
+      > Clinical Alert Event Publisher
+      > Clinical Alert Lifecycle Service
+
+  ACTIVE / ACKNOWLEDGED / RESOLVED and MQTT
+  ACTIVATE / SILENCE / RESET are outside this Level 4 component.
+end note
+
+note as disclaimer
+  All physiological values and thresholds are synthetic demo values,
+  not clinically validated and not medical guidance.
+end note
+
+@enduml

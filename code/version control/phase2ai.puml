@@ -1,0 +1,221 @@
+@startuml
+!include <C4/C4_Container>
+
+title Smart Hospital Patient Monitoring & Room Automation System - C4 Level 2
+
+LAYOUT_TOP_DOWN()
+
+
+' =========================================================
+' USERS
+' =========================================================
+
+Person(staff, "Medical Staff", "Monitor patients and acknowledge clinical alerts.")
+Person(admin, "Hospital IoT Administrator", "Configures rooms, patients, devices and thresholds.")
+
+
+' =========================================================
+' SMART HOSPITAL SYSTEM
+' =========================================================
+
+System_Boundary(system, "Smart Hospital Patient Monitoring & Room Automation System") {
+
+
+    ' =====================================================
+    ' HOSPITAL BACKEND
+    ' =====================================================
+
+    Container_Boundary(backend, "Hospital Backend Platform") {
+
+
+        ' -------------------------------------------------
+        ' USER INTERFACE
+        ' -------------------------------------------------
+
+        Container(webapp, "Clinical Monitoring Portal", "Web Application", "Shows live status, history, room conditions and alerts.")
+
+
+        ' -------------------------------------------------
+        ' ALERT MANAGEMENT
+        ' -------------------------------------------------
+
+        Container(alertService, "Clinical Alert Lifecycle Service", "Backend Service", "Manages alert activation, acknowledgement and resolution.")
+
+
+        ' -------------------------------------------------
+        ' FINAL DECISION / CONTROL
+        ' -------------------------------------------------
+
+        Container(decisionService, "Patient & Room Decision & Control Service", "Backend Service", "Decides clinical alerts, room-control actions and sleep-aware adaptations.")
+
+
+        ' -------------------------------------------------
+        ' DIGITAL TWIN + AI
+        ' -------------------------------------------------
+
+        Container_Boundary(intelligence, "Digital Twin & AI Layer") {
+
+            Container(digitalTwin, "Patient-in-Room Digital Twin", "Digital Twin Service", "Maintains synchronized patient, room, device and sleep state.")
+
+            Container(aiService, "AI Analytics & Prediction Service", "AI Service", "Estimates anomalies, predictions and patient sleep state.")
+        }
+
+
+        ' -------------------------------------------------
+        ' DATA INTEGRATION
+        ' -------------------------------------------------
+
+        Container(contextService, "IoT Data Context & Normalization Service", "Backend Service", "Normalizes telemetry and adds patient-room-device context.")
+
+        Container(broker, "Hospital IoT Message Broker", "MQTT Broker", "Routes telemetry, commands and device-state messages.")
+
+
+        ' -------------------------------------------------
+        ' DATABASES
+        ' -------------------------------------------------
+
+        ContainerDb(operationDB, "Patient-Room Operational Database", "SQL Database", "Stores rooms, assigned patients, mappings, thresholds, preferences and alert state.")
+
+        ContainerDb(timeDB, "Patient & Room Telemetry Database", "Time-Series DB", "Stores timestamped patient, room and actuator telemetry.")
+    }
+
+
+    ' =====================================================
+    ' HOSPITAL EDGE
+    ' =====================================================
+
+    Container_Boundary(edge, "Hospital Edge System") {
+
+        Container(sensorGateway, "Sensor Ingestion Gateway", "IoT Gateway", "Collects local sensor measurements and publishes telemetry.")
+
+        Container(actuatorGateway, "Room & Staff Alert Actuation Gateway", "IoT Gateway", "Executes room-control and staff-alert commands.")
+    }
+}
+
+
+
+
+
+
+
+
+' =========================================================
+' PHYSICAL DEVICES
+' =========================================================
+
+System_Ext(bodySensors, "Patient Physiological Sensors", "Heart rate, breathing rate and movement.")
+
+System_Ext(roomSensors, "Room Environment Sensors", "Temperature and ambient light.")
+
+System_Ext(roomActuators, "Room Environment Actuators", "Lights, blinds and air conditioning.")
+
+System_Ext(alertDevice, "Medical Staff Office Alert Device", "Red warning light and buzzer.")
+
+
+' =========================================================
+' USER INTERACTION
+' =========================================================
+
+Rel_D(staff, webapp, "Monitors patients / acknowledges alerts", "HTTPS")
+
+Rel_D(admin, webapp, "Configures rooms, patients and thresholds", "HTTPS")
+
+Rel_D(webapp, decisionService, "Requests live/history data and updates configuration", "REST / HTTPS")
+
+Rel_D(webapp, alertService, "Acknowledges clinical alert", "REST / HTTPS")
+
+
+' =========================================================
+' SENSOR INGESTION
+' =========================================================
+
+Rel_U(bodySensors, sensorGateway, "Physiological measurements", "BLE")
+
+Rel_U(roomSensors, sensorGateway, "Environmental measurements", "BLE / Zigbee")
+
+Rel_U(sensorGateway, broker, "Publishes sensor telemetry", "MQTT/TLS + JSON")
+
+Rel_U(broker, contextService, "Delivers telemetry and device-state events", "MQTT subscription")
+
+
+' =========================================================
+' CONTEXTUALIZATION & STORAGE
+' =========================================================
+
+Rel_L(contextService, operationDB, "Resolves room, patient and device mappings", "SQL")
+
+Rel_R(contextService, timeDB, "Stores normalized telemetry", "Time-Series API")
+
+Rel_U(contextService, digitalTwin, "Updates synchronized patient, room and device state", "Internal Event / API")
+
+
+' =========================================================
+' DIGITAL TWIN + AI
+' =========================================================
+
+Rel_R(digitalTwin, aiService, "Provides current synchronized state", "Internal API")
+
+Rel_L(timeDB, aiService, "Provides historical telemetry", "Time-Series API")
+
+Rel_U(digitalTwin, decisionService, "Provides current patient-room state", "Internal API")
+
+Rel_U(aiService, decisionService, "Provides anomaly score / prediction", "Internal API")
+
+
+' =========================================================
+' DECISION INPUTS
+' =========================================================
+
+Rel_L(decisionService, operationDB, "Reads thresholds, preferences and configuration", "SQL")
+
+Rel_R(decisionService, timeDB, "Reads historical telemetry for portal requests", "Time-Series API")
+
+
+' =========================================================
+' CLINICAL ALERT DECISION
+' =========================================================
+
+Rel_U(decisionService, alertService, "Sends final alert / recovery decision and severity", "Internal Event")
+
+Rel_U(alertService, webapp, "Pushes alert details and lifecycle state", "WebSocket")
+
+Rel_L(alertService, operationDB, "Stores alert state and acknowledgement", "SQL")
+
+
+' =========================================================
+' PHYSICAL STAFF ALERT
+' =========================================================
+
+Rel_D(alertService, broker, "Publishes alert-device activate / silence / reset command", "MQTT/TLS + JSON")
+
+
+' =========================================================
+' ROOM CONTROL
+' =========================================================
+
+Rel_D(decisionService, broker, "Publishes room-control commands", "MQTT/TLS + JSON")
+
+Rel_D(broker, actuatorGateway, "Delivers physical actuator commands", "MQTT/TLS")
+
+
+' =========================================================
+' PHYSICAL ACTUATION
+' =========================================================
+
+Rel_D(actuatorGateway, roomActuators, "Controls lights, blinds and A/C", "Zigbee / Modbus")
+
+Rel_D(actuatorGateway, alertDevice, "Controls red light and buzzer", "GPIO / Relay")
+
+
+' =========================================================
+' PHYSICAL FEEDBACK
+' =========================================================
+
+Rel_U(roomActuators, actuatorGateway, "Reports state / command acknowledgement", "Zigbee / Modbus")
+
+Rel_U(actuatorGateway, broker, "Publishes actuator state / command acknowledgement", "MQTT/TLS")
+
+
+SHOW_LEGEND()
+
+@enduml

@@ -1,0 +1,83 @@
+@startuml Level3_Component
+!include <C4/C4_Component>
+
+title Smart Hospital Patient Monitoring & Room Automation System\nC4 Level 3 - Component Diagram: Patient & Room Decision & Control Service
+
+LAYOUT_TOP_DOWN()
+HIDE_STEREOTYPE()
+
+AddElementTag("engine",  $bgColor="#B8541A", $fontColor="#FFFFFF", $borderColor="#8A3E12", $legendText="Decision & Control Service component")
+AddElementTag("intelligence", $bgColor="#7B3FA0", $fontColor="#FFFFFF", $borderColor="#5B2C78", $legendText="Digital Twin / AI")
+AddElementTag("state",   $bgColor="#6B5B95", $fontColor="#FFFFFF", $borderColor="#4A3F6B", $legendText="In-memory state")
+AddRelTag("command", $textColor="#B8541A", $lineColor="#B8541A", $legendText="Command / event output")
+
+' ============================================================
+' EXTERNAL CONTAINERS (same names/responsibilities as Level 2)
+' ============================================================
+Container(digitalTwin, "Patient-in-Room Digital Twin", "Digital Twin Service", "Synchronized physical + derived patient-room-device state, including sleepState and sleepProbability.", $tags="intelligence")
+Container(aiService, "AI Analytics & Prediction Service", "AI Service", "Provides anomaly scores and clinical predictions; writes sleep-state estimates into the Digital Twin.", $tags="intelligence")
+Container(alertService, "Clinical Alert Lifecycle Service", "Backend Service", "Manages ACTIVE > ACKNOWLEDGED > RESOLVED.")
+Container(broker, "Hospital IoT Message Broker", "MQTT Broker", "Routes room-control and alert-device commands.")
+ContainerDb(operationDB, "Patient-Room Operational Database", "SQL Database", "Thresholds, configuration and room/sleep preferences.")
+
+' ============================================================
+' DECISION & CONTROL SERVICE
+' ============================================================
+Container_Boundary(decisionService, "Patient & Room Decision & Control Service") {
+
+    ' ---- Inputs ----
+    Component(stateReceiver, "Digital Twin State Receiver", "Event / API Adapter", "Receives the latest physical + derived patient-room state, including sleep state, and keeps a latest-state view for the portal.", $tags="engine")
+    Component(aiReceiver, "AI Result Receiver", "Event / API Adapter", "Receives anomaly scores and clinical predictions from the AI service.", $tags="engine")
+
+    ' ---- Orchestration ----
+    Component(coordinator, "Decision Coordinator", "Application Service", "Builds one DecisionContext: Twin state (incl. sleep state) + AI clinical result + thresholds + preferences; then invokes both decision engines.", $tags="engine")
+
+    ' ---- Decision logic ----
+    Component(clinicalEngine, "Clinical Alert Decision Engine", "Rule Engine", "Combines current vitals, anomaly score and thresholds into ALERT / RECOVERY / NO_CHANGE with severity.", $tags="engine")
+    Component(sustainedTracker, "Sustained Condition Tracker", "In-memory sliding window", "Tracks consecutive abnormal/normal samples to avoid alerts on single noisy readings and prevent flapping.", $tags="state")
+    Component(roomEngine, "Sleep & Room Adaptation Engine", "Rule Engine", "Compares sleepState, room conditions and sleep preferences; decides Sleep Mode and lights / blinds / A/C targets.", $tags="engine")
+
+    ' ---- Repositories ----
+    Component(configRepository, "Configuration & Preference Repository", "Repository Adapter", "Provides and updates thresholds, room configuration and sleep preferences.")
+
+    ' ---- Outputs ----
+    Component(alertPublisher, "Clinical Alert Event Publisher", "Event Publisher", "Publishes the final clinical alert/recovery decision and severity.", $tags="engine")
+    Component(commandPublisher, "Room Control Command Publisher", "MQTT Publisher", "Publishes lights / blinds / A/C commands only when targets change.", $tags="engine")
+}
+
+' ============================================================
+' INPUTS
+' ============================================================
+Rel(digitalTwin, stateReceiver, "Provides current physical + derived state", "Internal API / Event")
+Rel(aiService, aiReceiver, "Provides anomaly score / clinical prediction", "Internal API / Event")
+Rel(stateReceiver, coordinator, "Latest synchronized state incl. sleep state")
+Rel(aiReceiver, coordinator, "Latest anomaly score / clinical prediction")
+
+' ============================================================
+' CONFIGURATION
+' ============================================================
+Rel(coordinator, configRepository, "Requests thresholds and preferences")
+Rel(configRepository, operationDB, "Reads / writes configuration", "SQL")
+
+' ============================================================
+' DECISION LOGIC
+' Engines receive DecisionContext; they do not query databases directly.
+' ============================================================
+Rel(coordinator, clinicalEngine, "Clinical evaluation request (DecisionContext)")
+Rel(coordinator, roomEngine, "Room adaptation request (DecisionContext)")
+Rel(clinicalEngine, sustainedTracker, "Updates / reads consecutive-sample state")
+
+' ============================================================
+' BRANCH A: CLINICAL ALERT
+' ============================================================
+Rel(clinicalEngine, alertPublisher, "Alert / recovery decision + severity", $tags="command")
+Rel(alertPublisher, alertService, "Sends final alert or recovery event", "Internal Event", $tags="command")
+
+' ============================================================
+' BRANCH B: ROOM CONTROL
+' ============================================================
+Rel(roomEngine, commandPublisher, "Room-control actions (Sleep Mode targets)", $tags="command")
+Rel(commandPublisher, broker, "Publishes lights / blinds / A/C commands", "MQTT/TLS + JSON", $tags="command")
+
+SHOW_LEGEND()
+@enduml

@@ -1,0 +1,111 @@
+@startuml Level2_Container
+!include <C4/C4_Container>
+
+title Smart Hospital Patient Monitoring & Room Automation System\nC4 Level 2 - Container Diagram
+
+LAYOUT_TOP_DOWN()
+HIDE_STEREOTYPE()
+
+' =========================================================
+' STYLE TAGS
+' =========================================================
+AddElementTag("intelligence", $bgColor="#7B3FA0", $fontColor="#FFFFFF", $borderColor="#5B2C78", $legendText="Digital Twin / AI")
+AddElementTag("decision",     $bgColor="#B8541A", $fontColor="#FFFFFF", $borderColor="#8A3E12", $legendText="Final decision & control")
+AddElementTag("edge",         $bgColor="#2E7D5B", $fontColor="#FFFFFF", $borderColor="#1F5C42", $legendText="Edge gateway")
+AddElementTag("device",       $bgColor="#64748B", $fontColor="#FFFFFF", $borderColor="#475569", $legendText="Physical device")
+AddRelTag("command",  $textColor="#B8541A", $lineColor="#B8541A", $legendText="Command / actuation flow")
+AddRelTag("feedback", $textColor="#2E7D5B", $lineColor="#2E7D5B", $lineStyle=DashedLine(), $legendText="Actuator feedback (closes the twin loop)")
+
+' =========================================================
+' USERS
+' =========================================================
+Person(staff, "Medical Staff", "Doctors and nurses. Monitor patients, view clinical alerts and acknowledge them.")
+
+' =========================================================
+' SYSTEM
+' =========================================================
+System_Boundary(system, "Smart Hospital Patient Monitoring & Room Automation System") {
+
+    ' ---------------- BACKEND ----------------
+    Container_Boundary(backend, "Hospital Backend Platform") {
+
+        Container(webapp, "Clinical Monitoring Portal", "Web Application", "Live patient/room status, history, clinical alerts, alert acknowledgement and configuration.")
+
+        Container(alertService, "Clinical Alert Lifecycle Service", "Backend Service", "Does NOT decide if a patient is unwell. Manages ACTIVE > ACKNOWLEDGED > RESOLVED and drives the staff alert device.")
+
+        Container(decisionService, "Patient & Room Decision & Control Service", "Backend Service", "The ONLY component that takes final decisions: clinical alert/recovery, room control and Sleep Mode.", $tags="decision")
+
+        Container_Boundary(intelligence, "Digital Twin & AI Layer") {
+            Container(digitalTwin, "Patient-in-Room Digital Twin", "Digital Twin Service", "Synchronized model of Room > Patient + sensors + actuators, including derived state such as sleepState and sleepProbability.", $tags="intelligence")
+            Container(aiService, "AI Analytics & Prediction Service", "AI Service", "Analyses current + historical data. Produces anomaly scores and derived predictions; writes sleep state back to the Digital Twin. Never controls anything.", $tags="intelligence")
+        }
+
+        Container(contextService, "IoT Data Context & Normalization Service", "Backend Service", "Normalizes telemetry and maps it to patient, room and device.")
+
+        Container(broker, "Hospital IoT Message Broker", "MQTT Broker", "Backbone for telemetry, commands and actuator state.")
+
+        ContainerDb(operationDB, "Patient-Room Operational Database", "SQL Database", "Rooms, assigned patient, device mappings, thresholds, room/sleep preferences and alert state.")
+        ContainerDb(timeDB, "Patient & Room Telemetry Database", "Time-Series DB", "Timestamped patient, room and actuator telemetry.")
+    }
+
+    ' ---------------- EDGE ----------------
+    Container_Boundary(edgeSystem, "Hospital Edge System") {
+        Container(sensorGateway, "Sensor Ingestion Gateway", "IoT Gateway", "Receives local BLE/Zigbee measurements and publishes them over MQTT.", $tags="edge")
+        Container(actuatorGateway, "Room & Staff Alert Actuation Gateway", "IoT Gateway", "Receives MQTT commands, translates them to device protocols and reports actuator state.", $tags="edge")
+    }
+}
+
+' =========================================================
+' PHYSICAL DEVICES
+' =========================================================
+System_Ext(bodySensors, "Patient Physiological Sensors", "Heart rate, breathing rate and movement.", $tags="device")
+System_Ext(roomSensors, "Room Environment Sensors", "Temperature and ambient light.", $tags="device")
+System_Ext(roomActuators, "Room Environment Actuators", "Smart lights, motorized blinds and air conditioning.", $tags="device")
+System_Ext(alertDevice, "Staff Office Alert Device", "Red warning light + buzzer at the nurses' station.", $tags="device")
+
+' =========================================================
+' USER INTERACTION
+' =========================================================
+Rel_D(staff, webapp, "Monitors patients, acknowledges alerts", "HTTPS")
+Rel_D(webapp, alertService, "Acknowledges clinical alert", "REST / HTTPS")
+
+' =========================================================
+' MAIN FLOW
+' =========================================================
+Rel_U(bodySensors, sensorGateway, "1. Physiological measurements", "BLE")
+Rel_U(roomSensors, sensorGateway, "1. Environmental measurements", "BLE / Zigbee")
+Rel_U(sensorGateway, broker, "2. Publishes telemetry", "MQTT/TLS + JSON")
+Rel_U(broker, contextService, "3. Delivers telemetry and actuator-state events", "MQTT subscription")
+
+Rel_L(contextService, operationDB, "Resolves room / patient / device mappings", "SQL")
+Rel_R(contextService, timeDB, "Stores normalized telemetry", "Time-Series API")
+Rel_U(contextService, digitalTwin, "4. Updates synchronized physical state", "Internal Event / API")
+
+Rel_R(digitalTwin, aiService, "5. Provides current synchronized state", "Internal API")
+Rel_U(aiService, digitalTwin, "Writes derived state (sleepState, sleepProbability)", "Internal API")
+
+Rel_U(digitalTwin, decisionService, "6. Provides physical + derived patient-room state", "Internal API")
+Rel_U(aiService, decisionService, "6. Provides anomaly score / clinical prediction", "Internal API")
+
+Rel_L(decisionService, operationDB, "Reads thresholds, preferences and configuration", "SQL")
+
+' ---- Branch A: clinical alert ----
+Rel_U(decisionService, alertService, "7a. Final alert / recovery decision + severity", "Internal Event")
+Rel_U(alertService, webapp, "Pushes alert details and lifecycle state", "WebSocket")
+Rel_L(alertService, operationDB, "Stores alert state and acknowledgement", "SQL")
+Rel_D(alertService, broker, "8a. ACTIVATE / SILENCE / RESET alert device", "MQTT/TLS + JSON", $tags="command")
+
+' ---- Branch B: room control ----
+Rel_D(decisionService, broker, "7b. Room-control commands (Sleep Mode, lights, blinds, A/C)", "MQTT/TLS + JSON", $tags="command")
+
+' ---- Actuation ----
+Rel_D(broker, actuatorGateway, "9. Delivers actuator commands", "MQTT/TLS", $tags="command")
+Rel_D(actuatorGateway, roomActuators, "10. Controls lights, blinds and A/C", "Zigbee / Modbus", $tags="command")
+Rel_D(actuatorGateway, alertDevice, "10. Controls red light and buzzer", "GPIO / Relay", $tags="command")
+
+' ---- Feedback ----
+Rel_U(roomActuators, actuatorGateway, "Reports state / command acknowledgement", "Zigbee / Modbus", $tags="feedback")
+Rel_U(actuatorGateway, broker, "Publishes actuator state / command acknowledgement", "MQTT/TLS", $tags="feedback")
+
+SHOW_LEGEND()
+@enduml

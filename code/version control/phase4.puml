@@ -1,0 +1,179 @@
+@startuml
+
+title Smart Hospital Patient Monitoring & Room Automation System\nC4 Level 4 - Clinical Alert Decision Engine Implementation
+
+top to bottom direction
+
+skinparam shadowing false
+skinparam linetype ortho
+skinparam roundcorner 15
+skinparam nodesep 55
+skinparam ranksep 55
+
+skinparam defaultFontName Arial
+skinparam defaultFontSize 13
+
+skinparam ArrowColor #64748B
+skinparam ArrowThickness 1.2
+
+skinparam componentStyle rectangle
+skinparam componentFontColor #FFFFFF
+skinparam componentBorderColor #2E6295
+
+skinparam packageStyle rectangle
+skinparam packageBackgroundColor #F8FAFC
+skinparam packageBorderColor #94A3B8
+skinparam packageFontColor #0F172A
+
+
+' ============================================================
+' DEMO ORCHESTRATION
+' ============================================================
+
+package "Emergency Scenario Orchestration" as orchestration {
+
+    component "run_emergency()\n\nSimulates increasing\nphysiological abnormality" as runEmergency #999999
+
+    component "run_recovery()\n\nSimulates the return\nto normal vital signs" as runRecovery #999999
+
+}
+
+
+' ============================================================
+' LEVEL 4 IMPLEMENTATION
+' ============================================================
+
+package "Clinical Alert Decision Engine\nPython Code Implementation" as engine {
+
+
+    ' --------------------------------------------------------
+    ' INPUT / CONFIGURATION
+    ' --------------------------------------------------------
+
+    component "Patient State\n\nheart_rate\nbreathing_rate\nanomaly_score" as patientState #1168BD
+
+    component "EMG Configuration\n\nhigh_anomaly = 0.75\nsustained_samples = 3\nrecovery thresholds" as emgConfig #1168BD
+
+
+    ' --------------------------------------------------------
+    ' RISK CALCULATION
+    ' --------------------------------------------------------
+
+    component "heart_rate_risk(hr)\n\nConverts heart rate into\na normalized risk value\nbetween 0 and 1" as heartRisk #438DD5
+
+    component "breathing_rate_risk(rr)\n\nConverts breathing rate into\na normalized risk value\nbetween 0 and 1" as breathingRisk #438DD5
+
+
+    component "anomaly_score(state)\n\nCombines physiological risks\ninto one anomaly score" as anomalyScore #438DD5
+
+
+    ' --------------------------------------------------------
+    ' FINAL DECISION
+    ' --------------------------------------------------------
+
+    component "emergency_decision(state)\n\nCompares the anomaly score\nwith the configured threshold" as emergencyDecision #438DD5
+
+
+    component "Clinical Decision\n\nalert = True / False\nseverity = HIGH / None" as decisionResult #2E8B57
+
+}
+
+
+' ============================================================
+' KEEP A CLEAN LAYOUT
+' ============================================================
+
+runEmergency -[hidden]right-> runRecovery
+
+patientState -[hidden]right-> emgConfig
+
+heartRisk -[hidden]right-> breathingRisk
+
+
+' ============================================================
+' ORCHESTRATION → ENGINE
+' ============================================================
+
+runEmergency -down-> patientState : updates abnormal\nvital signs
+
+runRecovery -down-> patientState : updates recovering\nvital signs
+
+
+' ============================================================
+' PATIENT STATE → RISK FUNCTIONS
+' ============================================================
+
+patientState -down-> heartRisk : heart_rate
+
+patientState -down-> breathingRisk : breathing_rate
+
+
+' ============================================================
+' RISK FUNCTIONS → AI ANOMALY SCORE
+' ============================================================
+
+heartRisk -down-> anomalyScore : hr_risk
+
+breathingRisk -down-> anomalyScore : rr_risk
+
+
+' ============================================================
+' ANOMALY → DECISION
+' ============================================================
+
+anomalyScore -down-> emergencyDecision : anomaly score\nstored in patient state
+
+emgConfig -down-> emergencyDecision : high anomaly\nthreshold
+
+
+' ============================================================
+' DECISION OUTPUT
+' ============================================================
+
+emergencyDecision -down-> decisionResult : returns
+
+
+' ============================================================
+' NOTES
+' ============================================================
+
+note left of anomalyScore
+
+AI calculation:
+
+anomaly score combines
+heart-rate risk and
+breathing-rate risk.
+
+The AI only estimates
+abnormality.
+
+end note
+
+
+note right of emergencyDecision
+
+Final decision belongs to
+the Decision Service.
+
+The anomaly score does not
+activate the alarm directly.
+
+end note
+
+
+note bottom of decisionResult
+
+The result is returned to the
+Level 3 flow:
+
+Clinical Alert Decision Engine
+        ↓
+Clinical Alert Event Publisher
+        ↓
+Clinical Alert Lifecycle Service
+
+end note
+
+
+@enduml

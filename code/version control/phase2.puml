@@ -1,0 +1,149 @@
+@startuml
+!include <C4/C4_Container>
+
+title Smart Hospital Patient Monitoring & Room Automation System - C4 Level 2
+
+LAYOUT_TOP_DOWN()
+
+' =========================================================
+' USERS
+' =========================================================
+
+Person(staff, "Medical Staff", "Monitor patients, receive alerts and acknowledge incidents.")
+Person(admin, "Hospital IoT Administrator", "Configures rooms, devices, thresholds and patient-room assignments.")
+
+
+' =========================================================
+' SMART HOSPITAL SYSTEM
+' =========================================================
+
+System_Boundary(system, "Smart Hospital Patient Monitoring & Room Automation System") {
+
+    ' =====================================================
+    ' HOSPITAL BACKEND
+    ' =====================================================
+
+    Container_Boundary(backend, "Hospital Backend Platform") {
+
+        Container(webapp, "Clinical Monitoring Portal", "Web Application", "Shows patient status, room conditions and clinical alerts.")
+
+        Container(alertService, "Clinical Alert & Notification Service", "Backend Service", "Manages alert activation, acknowledgement, resolution and staff notification.")
+
+        Container(appServer, "Patient Monitoring & Room Control Service", "Backend Service", "Evaluates patient and room conditions and decides required actions.")
+
+        Container(mediator, "Sensor Data Context Service", "Backend Service", "Normalizes sensor data and associates it with the correct patient and room.")
+
+        Container(broker, "Hospital IoT Message Broker", "MQTT Broker", "Routes telemetry, control commands and device-state messages.")
+
+        ContainerDb(operationDB, "Patient-Room Configuration Database", "Database", "Stores mappings, thresholds and room preferences.")
+
+        ContainerDb(timeDB, "Patient & Room Telemetry Database", "Time-Series DB", "Stores historical sensor measurements.")
+    }
+
+
+    ' =====================================================
+    ' HOSPITAL EDGE
+    ' =====================================================
+
+    Container_Boundary(edge, "Hospital Edge System") {
+
+        Container(sensorGateway, "Sensor Ingestion Gateway", "IoT Gateway", "Collects local sensor data and publishes telemetry.")
+
+        Container(actuatorGateway, "Room & Staff Alert Actuation Gateway", "IoT Gateway", "Receives MQTT commands and controls physical actuators.")
+    }
+}
+
+
+' =========================================================
+' PHYSICAL DEVICES
+' =========================================================
+
+System_Ext(bodySensors, "Patient Physiological Sensors", "Heart rate, breathing rate and movement.")
+
+System_Ext(roomSensors, "Room Environment Sensors", "Temperature and ambient light.")
+
+System_Ext(environmentActuators, "Room Environment Actuators", "Smart lights, motorized blinds and air conditioning.")
+
+System_Ext(staffAlertDevice, "Medical Staff Office Alert Device", "Red warning light and buzzer in the staff office/rest area.")
+
+
+' =========================================================
+' USER INTERACTION
+' =========================================================
+
+Rel_D(staff, webapp, "Monitors patients and manages alerts", "HTTPS")
+
+Rel_D(admin, webapp, "Configures the system", "HTTPS")
+
+Rel_D(webapp, appServer, "Reads patient/room status and updates configuration", "REST / HTTPS")
+
+
+' =========================================================
+' SENSOR FLOW
+' =========================================================
+
+Rel_U(bodySensors, sensorGateway, "Physiological measurements", "BLE")
+
+Rel_U(roomSensors, sensorGateway, "Environmental measurements", "Zigbee / BLE")
+
+Rel_U(sensorGateway, broker, "Publishes telemetry", "MQTT / JSON")
+
+Rel_U(broker, mediator, "Delivers sensor telemetry", "MQTT")
+
+Rel_U(mediator, appServer, "Provides contextualized measurements", "Internal API")
+
+
+' =========================================================
+' DATA STORAGE
+' =========================================================
+
+Rel_R(mediator, timeDB, "Stores sensor measurements", "Time-Series DB API")
+
+Rel_L(mediator, operationDB, "Reads sensor-patient-room mappings", "SQL")
+
+Rel_L(appServer, operationDB, "Reads thresholds and room preferences", "SQL")
+
+
+' =========================================================
+' CLINICAL ALERT LOGIC
+' =========================================================
+
+Rel_U(appServer, alertService, "Reports abnormal or recovered patient condition", "Internal API / Event")
+
+Rel_U(alertService, webapp, "Pushes alert details and current alert state", "WebSocket")
+
+Rel_D(webapp, alertService, "Acknowledges clinical alert", "REST / HTTPS")
+
+Rel_D(alertService, broker, "Publishes alert-device command: activate, silence or reset", "MQTT / JSON")
+
+
+' =========================================================
+' ROOM CONTROL
+' =========================================================
+
+Rel_D(appServer, broker, "Publishes room-control commands", "MQTT / JSON")
+
+Rel_D(broker, actuatorGateway, "Delivers actuator commands", "MQTT")
+
+
+' =========================================================
+' PHYSICAL ACTUATION
+' =========================================================
+
+Rel_D(actuatorGateway, environmentActuators, "Controls lights, blinds and A/C", "Local device protocol")
+
+Rel_D(actuatorGateway, staffAlertDevice, "Controls red light and buzzer", "GPIO / Relay")
+
+
+' =========================================================
+' ACTUATOR FEEDBACK
+' =========================================================
+
+Rel_U(environmentActuators, actuatorGateway, "Reports current device state", "Local device protocol")
+
+Rel_U(actuatorGateway, broker, "Publishes actuator state", "MQTT")
+
+
+SHOW_LEGEND()
+
+@enduml

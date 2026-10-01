@@ -1,0 +1,116 @@
+@startuml SmartHospitalDecisionService
+
+!include <C4/C4_Component>
+
+title Smart Hospital Patient Monitoring & Room Automation System\nC4 Level 3 - Patient & Room Decision & Control Service
+
+LAYOUT_TOP_DOWN()
+
+' ============================================================
+' EXTERNAL CONTAINERS
+' ============================================================
+
+Container(webapp, "Clinical Monitoring Portal", "Web Application", "Displays live patient status, room conditions, history and clinical alerts.")
+
+Container(digitalTwin, "Patient-in-Room Digital Twin", "Digital Twin Service", "Maintains synchronized physical and derived patient-room-device state.")
+
+Container(alertService, "Clinical Alert Lifecycle Service", "Backend Service", "Manages alert activation, acknowledgement and resolution.")
+
+Container(broker, "Hospital IoT Message Broker", "MQTT Broker", "Routes room-control and alert-device commands.")
+
+ContainerDb(operationDB, "Patient-Room Operational Database", "SQL Database", "Stores thresholds, configuration and room/sleep preferences.")
+
+ContainerDb(timeDB, "Patient & Room Telemetry Database", "Time-Series Database", "Stores historical patient, room and actuator telemetry.")
+
+
+' ============================================================
+' DECISION & CONTROL SERVICE
+' ============================================================
+
+Container_Boundary(decisionService, "Patient & Room Decision & Control Service") {
+
+    Component(apiController, "Portal API Controller", "REST Controller", "Handles status, history and configuration requests from the Clinical Monitoring Portal.")
+
+    Component(stateReceiver, "Digital Twin State Receiver", "Event / API Adapter", "Receives the latest synchronized physical and derived state from the Digital Twin.")
+
+    Component(coordinator, "Decision Coordinator", "Application Service", "Coordinates decision processing and invokes the appropriate decision engines.")
+
+    Component(clinicalEngine, "Clinical Alert Decision Engine", "Rule Engine", "Evaluates physiological state, anomaly results and configured thresholds.")
+
+    Component(roomEngine, "Sleep & Room Adaptation Engine", "Rule Engine", "Evaluates sleep state, room conditions and patient preferences.")
+
+    Component(configRepository, "Configuration & Preference Repository", "Repository Adapter", "Provides thresholds, room configuration and sleep preferences.")
+
+    Component(telemetryRepository, "Historical Telemetry Query Adapter", "Repository Adapter", "Retrieves historical patient and room telemetry.")
+
+    Component(alertPublisher, "Clinical Alert Event Publisher", "Event Publisher", "Publishes final clinical alert and recovery decisions.")
+
+    Component(commandPublisher, "Room Control Command Publisher", "MQTT Publisher", "Publishes control commands for lights, blinds and air conditioning.")
+}
+
+
+' ============================================================
+' PORTAL
+' ============================================================
+
+Rel(webapp, apiController, "Requests status/history or changes configuration", "REST / HTTPS")
+
+Rel(apiController, configRepository, "Reads or updates configuration")
+
+Rel(apiController, telemetryRepository, "Requests historical telemetry")
+
+
+' ============================================================
+' DIGITAL TWIN INPUT
+' ============================================================
+
+Rel(digitalTwin, stateReceiver, "Provides current physical and derived patient-room state", "Internal API / Event")
+
+Rel(stateReceiver, coordinator, "Provides latest synchronized state")
+
+
+' ============================================================
+' CONFIGURATION
+' ============================================================
+
+Rel(coordinator, configRepository, "Requests thresholds and preferences")
+
+Rel(configRepository, operationDB, "Reads / writes configuration", "SQL")
+
+Rel(telemetryRepository, timeDB, "Reads historical telemetry", "Time-Series API")
+
+
+' ============================================================
+' DECISION LOGIC
+' ============================================================
+
+Rel(coordinator, clinicalEngine, "Requests clinical evaluation")
+
+Rel(coordinator, roomEngine, "Requests room adaptation evaluation")
+
+Rel(configRepository, clinicalEngine, "Provides clinical thresholds")
+
+Rel(configRepository, roomEngine, "Provides room and sleep preferences")
+
+
+' ============================================================
+' CLINICAL ALERT BRANCH
+' ============================================================
+
+Rel(clinicalEngine, alertPublisher, "Produces alert / recovery decision and severity")
+
+Rel(alertPublisher, alertService, "Sends final clinical alert or recovery event", "Internal Event")
+
+
+' ============================================================
+' ROOM CONTROL BRANCH
+' ============================================================
+
+Rel(roomEngine, commandPublisher, "Produces room-control actions")
+
+Rel(commandPublisher, broker, "Publishes lights / blinds / A-C commands", "MQTT/TLS + JSON")
+
+
+SHOW_LEGEND()
+
+@enduml
